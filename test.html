@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthPulse Pro - Dynamic Body Visualizer & Health Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Kanit', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        /* SVG Animation Transition */
+        #bodySilhouette {
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center center;
+        }
+        /* Print Stylesheet for One-Click Health Report */
+        @media print {
+            body { background: white !important; color: black !important; }
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            .glass-card { border: 1px solid #ccc !important; box-shadow: none !important; backdrop-filter: none !important; }
+            .print-break { page-break-before: always; }
+        }
+    </style>
+</head>
+<body class="bg-slate-900 min-h-screen text-slate-800 flex flex-col justify-between antialiased">
+
+    <!-- Header & Navigation -->
+    <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-teal-500 to-emerald-400 p-2 rounded-xl text-white shadow-lg shadow-teal-500/20">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+                <span class="text-xl font-bold bg-gradient-to-r from-teal-400 to-emerald-400 bg-clip-text text-transparent">HealthPulse Pro</span>
+            </div>
+
+            <!-- Auth Controls -->
+            <div id="authNav" class="flex items-center space-x-4">
+                <!-- Dynamic Auth Buttons loaded via JS -->
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-grow w-full space-y-8">
+        
+        <!-- Welcome & User Overview Banner (Shown when logged in) -->
+        <div id="userBanner" class="hidden bg-gradient-to-r from-teal-900/40 to-slate-900 border border-teal-500/30 p-6 rounded-3xl text-white flex flex-col md:flex-row justify-between items-center gap-4 no-print">
+            <div>
+                <h2 class="text-2xl font-bold">สวัสดีคุณ <span id="userNameDisplay" class="text-teal-400">User</span> 👋</h2>
+                <p class="text-slate-400 text-sm mt-1" id="userProgressSummary">ยินดีต้อนรับสู่ระบบติดตามสุขภาพรายบุคคล</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="saveTodayRecord()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-medium px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-500/20 transition flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                    บันทึกผลวันนี้
+                </button>
+                <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl transition flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    พิมพ์รายงาน
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Dashboard Grid -->
+        <div class="grid lg:grid-cols-12 gap-8">
+            
+            <!-- LEFT PANEL: Inputs & Calculators (5 Cols) -->
+            <div class="lg:col-span-5 space-y-6 no-print">
+                <div class="glass-card p-6 rounded-3xl shadow-xl">
+                    <h3 class="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-teal-500"></span> ข้อมูลร่างกายและสัดส่วน
+                    </h3>
+                    
+                    <form id="healthForm" class="space-y-4">
+                        <!-- Age & Muscle Factor -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">กลุ่มอายุ</label>
+                                <select id="ageGroup" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                                    <option value="adult">ผู้ใหญ่ (18-59 ปี)</option>
+                                    <option value="elderly">ผู้สูงอายุ (60+ ปี)</option>
+                                    <option value="teen">เด็ก/วัยรุ่น (5-17 ปี)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">ประเภทโครงสร้าง</label>
+                                <select id="bodyType" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                                    <option value="normal">คนทั่วไป</option>
+                                    <option value="athlete">นักกีฬา / มีมวลกล้ามเนื้อมาก</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Gender Select -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">เพศทางชีววิทยา</label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 text-center flex items-center justify-center space-x-2 transition has-[:checked]:border-teal-500 has-[:checked]:bg-teal-50/50">
+                                    <input type="radio" name="gender" value="male" class="hidden" checked onchange="toggleHipInput()">
+                                    <span class="text-sm font-medium">ชาย ♂</span>
+                                </label>
+                                <label class="cursor-pointer border border-slate-200 rounded-xl p-2.5 text-center flex items-center justify-center space-x-2 transition has-[:checked]:border-teal-500 has-[:checked]:bg-teal-50/50">
+                                    <input type="radio" name="gender" value="female" class="hidden" onchange="toggleHipInput()">
+                                    <span class="text-sm font-medium">หญิง ♀</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Basic Specs -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">น้ำหนัก (กก.)</label>
+                                <input type="number" id="weight" value="70" step="0.1" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">ส่วนสูง (ซม.)</label>
+                                <input type="number" id="height" value="170" step="0.1" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                            </div>
+                        </div>
+
+                        <!-- US Navy Body Fat Inputs -->
+                        <div class="pt-2 border-t border-slate-100 space-y-3">
+                            <span class="text-xs font-bold text-teal-600 uppercase tracking-wider block">การวัดสัดส่วน (เพื่อคำนวณ % ไขมัน)</span>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs text-slate-500 mb-1">รอบเอว (ซม.)</label>
+                                    <input type="number" id="waist" value="80" step="0.1" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-500 mb-1">รอบคอ (ซม.)</label>
+                                    <input type="number" id="neck" value="38" step="0.1" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                                </div>
+                            </div>
+                            <div id="hipContainer" class="hidden">
+                                <label class="block text-xs text-slate-500 mb-1">รอบสะโพก (ซม.) - สำหรับผู้หญิง</label>
+                                <input type="number" id="hip" value="95" step="0.1" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none">
+                            </div>
+                        </div>
+
+                        <!-- Timeline Predictor Slider -->
+                        <div class="pt-2 border-t border-slate-100">
+                            <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">ระดับความตั้งใจลด/ปรับหุ่น</label>
+                            <input type="range" id="intensity" min="1" max="3" value="2" class="w-full accent-teal-500">
+                            <div class="flex justify-between text-xs text-slate-400 mt-1">
+                                <span>สายชิล (0.25kg/สัปดาห์)</span>
+                                <span>สายกลาง (0.5kg/สัปดาห์)</span>
+                                <span>จริงจัง (0.8kg/สัปดาห์)</span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: Visualizer & Results (7 Cols) -->
+            <div class="lg:col-span-7 space-y-6">
+                
+                <!-- Dynamic SVG Visualizer Card -->
+                <div class="glass-card p-6 rounded-3xl shadow-xl relative overflow-hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Dynamic Body Visualizer
+                        </h3>
+                        <div class="flex bg-slate-100 p-1 rounded-xl text-xs font-medium no-print">
+                            <button id="toggleCurrentBtn" onclick="setVisualizerMode('current')" class="px-3 py-1.5 rounded-lg bg-white shadow-sm text-slate-800 transition">ปัจจุบัน</button>
+                            <button id="toggleGoalBtn" onclick="setVisualizerMode('goal')" class="px-3 py-1.5 rounded-lg text-slate-500 transition">เป้าหมาย (Goal)</button>
+                        </div>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-6 items-center">
+                        <!-- Interactive SVG Canvas -->
+                        <div class="bg-slate-900 rounded-2xl p-6 flex flex-col items-center justify-center min-h-[280px] relative">
+                            <span id="visualizerTag" class="absolute top-3 left-3 bg-teal-500/20 text-teal-300 text-[10px] px-2.5 py-1 rounded-full border border-teal-500/30">โมเดลจำลองปัจจุบัน</span>
+                            
+                            <!-- Vector Body Silhouette -->
+                            <svg id="svgCanvas" class="w-36 h-64" viewBox="0 0 100 200">
+                                <g id="bodySilhouette" fill="#14b8a6" opacity="0.85">
+                                    <!-- Head -->
+                                    <circle cx="50" cy="20" r="12" />
+                                    <!-- Torso & Body Shape -->
+                                    <path id="bodyPath" d="M 35 36 C 35 36, 50 36, 65 36 C 68 55, 65 95, 60 115 C 55 115, 45 115, 40 115 C 35 95, 32 55, 35 36 Z" />
+                                    <!-- Left Arm -->
+                                    <rect id="leftArm" x="22" y="36" width="10" height="60" rx="5" />
+                                    <!-- Right Arm -->
+                                    <rect id="rightArm" x="68" y="36" width="10" height="60" rx="5" />
+                                    <!-- Left Leg -->
+                                    <rect id="leftLeg" x="37" y="117" width="11" height="70" rx="5" />
+                                    <!-- Right Leg -->
+                                    <rect id="rightLeg" x="52" y="117" width="11" height="70" rx="5" />
+                                </g>
+                            </svg>
+                        </div>
+
+                        <!-- Real-time Metrics Overview -->
+                        <div class="space-y-4">
+                            <div class="border-b border-slate-100 pb-3">
+                                <span class="text-xs text-slate-400 font-medium">ค่า BMI ของคุณ</span>
+                                <div class="flex items-baseline space-x-2">
+                                    <span id="bmiVal" class="text-4xl font-extrabold text-slate-900">--</span>
+                                    <span id="bmiCategoryBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100">--</span>
+                                </div>
+                                <p id="muscleAlert" class="text-xs text-amber-600 mt-1 hidden">⚠️ มีมวลกล้ามเนื้อสูง ค่า BMI อาจสูงกว่าความเป็นจริง</p>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                    <span class="text-[11px] text-slate-400 block">เปอร์เซ็นต์ไขมัน (% Body Fat)</span>
+                                    <span id="bodyFatVal" class="text-xl font-bold text-slate-800">-- %</span>
+                                    <span id="fatCategory" class="text-[10px] block text-teal-600 mt-0.5">--</span>
+                                </div>
+                                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                    <span class="text-[11px] text-slate-400 block">มวลไขมัน / มวลกล้ามเนื้อ</span>
+                                    <span id="massVal" class="text-sm font-bold text-slate-800">-- / -- กก.</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-teal-50/60 p-3.5 rounded-2xl border border-teal-100">
+                                <span class="text-xs font-bold text-teal-900 flex items-center gap-1">🎯 อัตราส่วนเอว/สูง (WtHR)</span>
+                                <span id="wthrVal" class="text-sm text-teal-700 block mt-0.5">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Goal Timeline & Cardio Swap -->
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Timeline Predictor -->
+                    <div class="glass-card p-5 rounded-3xl shadow-xl space-y-2">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">🗓️ คาดการณ์ระยะเวลาเป้าหมาย</h4>
+                        <div id="timelineOutput" class="text-sm text-slate-700 font-medium">
+                            --
+                        </div>
+                    </div>
+
+                    <!-- Cardio Swap -->
+                    <div class="glass-card p-5 rounded-3xl shadow-xl space-y-2">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">🔥 พลังงานส่วนเกิน & การออกกำลังกาย</h4>
+                        <div id="cardioSwapOutput" class="text-sm text-slate-700 font-medium">
+                            --
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Health Advice -->
+                <div class="glass-card p-6 rounded-3xl shadow-xl space-y-3">
+                    <h4 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        💡 คำแนะนำเฉพาะบุคคล (Age & Risk Adjusted)
+                    </h4>
+                    <ul id="recommendationsList" class="space-y-2 text-sm text-slate-600">
+                        <!-- Dynamic Lists -->
+                    </ul>
+                </div>
+
+                <!-- User History Table (Shown when logged in) -->
+                <div id="historyCard" class="glass-card p-6 rounded-3xl shadow-xl hidden no-print">
+                    <h4 class="text-sm font-bold text-slate-900 mb-4">📈 ประวัติการบันทึกสุขภาพของคุณ</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs text-slate-600">
+                            <thead class="bg-slate-50 text-slate-400 uppercase">
+                                <tr>
+                                    <th class="p-2.5 rounded-l-xl">วันที่</th>
+                                    <th class="p-2.5">น้ำหนัก (กก.)</th>
+                                    <th class="p-2.5">BMI</th>
+                                    <th class="p-2.5">% ไขมัน</th>
+                                    <th class="p-2.5 rounded-r-xl">การเปลี่ยนแปลง</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody" class="divide-y divide-slate-100">
+                                <!-- History Rows -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Authentication Modal (Login / Register) -->
+    <div id="authModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center hidden no-print">
+        <div class="bg-white w-full max-w-md p-6 rounded-3xl shadow-2xl relative">
+            <button onclick="toggleAuthModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">✕</button>
+            
+            <div id="loginFormContainer">
+                <h3 class="text-xl font-bold text-slate-900 mb-1">เข้าสู่ระบบ</h3>
+                <p class="text-xs text-slate-400 mb-4">เข้าใช้งานเพื่อติดตามและบันทึกประวัติสุขภาพ</p>
+                <form onsubmit="handleLogin(event)" class="space-y-3">
+                    <input type="text" id="loginUsername" placeholder="ชื่อผู้ใช้งาน (Username)" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none">
+                    <input type="password" id="loginPassword" placeholder="รหัสผ่าน" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none">
+                    <button type="submit" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-medium py-3 rounded-xl transition shadow-lg shadow-teal-500/20">เข้าสู่ระบบ</button>
+                </form>
+                <p class="text-xs text-center text-slate-500 mt-4">ยังไม่มีบัญชี? <button onclick="switchAuthMode('register')" class="text-teal-600 font-semibold underline">สมัครสมาชิก</button></p>
+            </div>
+
+            <div id="registerFormContainer" class="hidden">
+                <h3 class="text-xl font-bold text-slate-900 mb-1">สมัครสมาชิก</h3>
+                <p class="text-xs text-slate-400 mb-4">สร้างบัญชีใหม่เพื่อรับการวิเคราะห์ส่วนบุคคล</p>
+                <form onsubmit="handleRegister(event)" class="space-y-3">
+                    <input type="text" id="regUsername" placeholder="ตั้งชื่อผู้ใช้งาน (Username)" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none">
+                    <input type="password" id="regPassword" placeholder="ตั้งรหัสผ่าน" required class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none">
+                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3 rounded-xl transition shadow-lg shadow-emerald-500/20">สมัครสมาชิก</button>
+                </form>
+                <p class="text-xs text-center text-slate-500 mt-4">มีบัญชีอยู่แล้ว? <button onclick="switchAuthMode('login')" class="text-teal-600 font-semibold underline">เข้าสู่ระบบ</button></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="text-center py-4 text-xs text-slate-500 border-t border-slate-800 no-print">
+        <p>HealthPulse Pro - สถาบันเทคโนโลยีเพื่อการดูแลสุขภาพ © 2026</p>
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // Global State Management
+        let currentUser = null;
+        let currentVisualizerMode = 'current'; // 'current' or 'goal'
+        let lastCalculatedState = {};
+
+        // Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthSession();
+            setupEventListeners();
+            calculateHealthMetrics();
+        });
+
+        function setupEventListeners() {
+            const inputs = ['weight', 'height', 'waist', 'neck', 'hip', 'ageGroup', 'bodyType', 'intensity'];
+            inputs.forEach(id => {
+                document.getElementById(id).addEventListener('input', calculateHealthMetrics);
+            });
+        }
+
+        function toggleHipInput() {
+            const gender = document.querySelector('input[name="gender"]:checked').value;
+            const hipContainer = document.getElementById('hipContainer');
+            if (gender === 'female') {
+                hipContainer.classList.remove('hidden');
+            } else {
+                hipContainer.classList.add('hidden');
+            }
+            calculateHealthMetrics();
+        }
+
+        // --- Core Health Calculation Engine ---
+        function calculateHealthMetrics() {
+            const gender = document.querySelector('input[name="gender"]:checked').value;
+            const weight = parseFloat(document.getElementById('weight').value) || 0;
+            const height = parseFloat(document.getElementById('height').value) || 0;
+            const waist = parseFloat(document.getElementById('waist').value) || 0;
+            const neck = parseFloat(document.getElementById('neck').value) || 0;
+            const hip = parseFloat(document.getElementById('hip').value) || 0;
+            const ageGroup = document.getElementById('ageGroup').value;
+            const bodyType = document.getElementById('bodyType').value;
+            const intensity = parseInt(document.getElementById('intensity').value);
+
+            if (!weight || !height) return;
+
+            const heightM = height / 100;
+            const bmi = (weight / (heightM * heightM)).toFixed(1);
+
+            // Muscle Factor & BMI Alert
+            const muscleAlert = document.getElementById('muscleAlert');
+            if (bodyType === 'athlete' && bmi >= 23) {
+                muscleAlert.classList.remove('hidden');
+            } else {
+                muscleAlert.classList.add('hidden');
+            }
+
+            // Waist-to-Height Ratio (WtHR)
+            const wthr = waist ? (waist / height).toFixed(2) : 0;
+            let wthrText = '';
+            if (wthr > 0) {
+                if (wthr <= 0.5) wthrText = `${wthr} (รอบเอวอยู่ในเกณฑ์ความเสี่ยงต่ำ 👍)`;
+                else wthrText = `${wthr} (มีความเสี่ยงต่อภาวะอ้วนลงท้อง ⚠️)`;
+            }
+
+            // US Navy Body Fat % Formula
+            let bodyFat = 0;
+            if (waist && neck && height) {
+                if (gender === 'male') {
+                    bodyFat = 495 / (1.0324 - 0.19077 * Math.log10(waist - neck) + 0.15456 * Math.log10(height)) - 450;
+                } else if (hip) {
+                    bodyFat = 495 / (1.29579 - 0.35004 * Math.log10(waist + hip - neck) + 0.22100 * Math.log10(height)) - 450;
+                }
+            }
+            bodyFat = bodyFat > 0 ? parseFloat(bodyFat.toFixed(1)) : 0;
+
+            const fatMass = (weight * (bodyFat / 100)).toFixed(1);
+            const leanMass = (weight - fatMass).toFixed(1);
+
+            // Body Fat Categorization
+            let fatCategory = '--';
+            if (bodyFat > 0) {
+                if (gender === 'male') {
+                    if (bodyFat < 6) fatCategory = 'ไขมันจำเป็น (Essential)';
+                    else if (bodyFat <= 13) fatCategory = 'นักกีฬา (Athletes)';
+                    else if (bodyFat <= 17) fatCategory = 'ฟิตเนส (Fitness)';
+                    else if (bodyFat <= 24) fatCategory = 'ปานกลาง (Average)';
+                    else fatCategory = 'ไขมันสูง (Obese)';
+                } else {
+                    if (bodyFat < 14) fatCategory = 'ไขมันจำเป็น (Essential)';
+                    else if (bodyFat <= 20) fatCategory = 'นักกีฬา (Athletes)';
+                    else if (bodyFat <= 24) fatCategory = 'ฟิตเนส (Fitness)';
+                    else if (bodyFat <= 31) fatCategory = 'ปานกลาง (Average)';
+                    else fatCategory = 'ไขมันสูง (Obese)';
+                }
+            }
+
+            // Ideal Weight Range (BMI 18.5 - 22.9 Asian Criteria)
+            const minIdealWeight = (18.5 * (heightM * heightM)).toFixed(1);
+            const maxIdealWeight = (22.9 * (heightM * heightM)).toFixed(1);
+
+            // Timeline & Cardio Swap Predictor
+            let weightDiff = 0;
+            if (weight > maxIdealWeight) weightDiff = weight - maxIdealWeight;
+            else if (weight < minIdealWeight) weightDiff = minIdealWeight - weight;
+
+            let ratePerWeek = intensity === 1 ? 0.25 : intensity === 2 ? 0.5 : 0.8;
+            let weeksNeeded = Math.ceil(weightDiff / ratePerWeek);
+            
+            let timelineHtml = '';
+            if (weight > maxIdealWeight) {
+                const targetDate = new Date();
+                targetDate.setDate(targetDate.getDate() + (weeksNeeded * 7));
+                timelineHtml = `หากลดน้ำหนักสัปดาห์ละ <strong>${ratePerWeek} กก.</strong> คุณจะถึงเป้าหมาย <strong>${maxIdealWeight} กก.</strong> ภายในประมาณ <strong>${weeksNeeded} สัปดาห์</strong> (${targetDate.toLocaleDateString('th-TH', { month: 'short', day: 'numeric', year: 'numeric' })})`;
+            } else if (weight < minIdealWeight) {
+                timelineHtml = `แนะนำให้เพิ่มน้ำหนักขึ้นอีก <strong>${weightDiff.toFixed(1)} กก.</strong> เพื่อให้อยู่ในเกณฑ์สุขภาพดีแบบสมส่วน`;
+            } else {
+                timelineHtml = `🎉 น้ำหนักของคุณอยู่ในเกณฑ์มาตรฐานเรียบร้อยแล้ว! รักษาพฤติกรรมที่ดีนี้ไว้ต่อไป`;
+            }
+
+            // Cardio Swap Calculations (1 kg fat = 7700 kcal)
+            const totalKcalToBurn = (weightDiff * 7700).toFixed(0);
+            const runHours = (totalKcalToBurn / 500).toFixed(0); // ~500 kcal/hr jogging
+            const walkHours = (totalKcalToBurn / 300).toFixed(0); // ~300 kcal/hr walking
+
+            let cardioHtml = weight > maxIdealWeight 
+                ? `ไขมันส่วนเกินเทียบเท่าพลังงาน <strong>${Number(totalKcalToBurn).toLocaleString()} kcal</strong><br>เทียบเท่ากับการวิ่งจ๊อกกิ้ง ~<strong>${runHours} ชม.</strong> หรือเดินเร็ว ~<strong>${walkHours} ชม.</strong>`
+                : `ร่างกายมีสมดุลพลังงานดีเยี่ยม ไม่จำเป็นต้องเผาผลาญไขมันส่วนเกินออกเพิ่มเติม`;
+
+            // UI Recommendations Engine based on Age & Conditions
+            let recs = [];
+            if (ageGroup === 'elderly') {
+                recs.push('<strong>ผู้สูงอายุ (60+):</strong> ควรเน้นทานโปรตีนให้เพียงพอเพื่อป้องกันภาวะมวลกล้ามเนื้อน้อย (Sarcopenia)');
+                recs.push('<strong>การออกกำลังกาย:</strong> เน้นการออกกำลังกายแรงกระแทกต่ำ เช่น เดินเร็ว รำมวยจีน หรือกายบริหารใต้น้ำ');
+            } else if (ageGroup === 'teen') {
+                recs.push('<strong>วัยรุ่น (5-17 ปี):</strong> ร่างกายกำลังเจริญเติบโต ไม่ควรใช้วิธีอดอาหาร เน้นโภชนาการที่ครบ 5 หมู่');
+            }
+
+            if (bmi >= 25) {
+                recs.push('<strong>โภชนาการ:</strong> ปรับลดแคลอรีต่อวัน (Caloric Deficit) โดยลดแป้งแปรรูปและน้ำตาล');
+                recs.push('<strong>ป้องกัน NCDs:</strong> การลดน้ำหนัก 5-10% ช่วยลดความเสี่ยงโรคเบาหวานและความดันโลหิตสูงอย่างมีนัยสำคัญ');
+            } else if (bmi < 18.5) {
+                recs.push('<strong>การเพิ่มมวล:</strong> เน้นรับประทานอาหารที่มีความหนาแน่นสารอาหารสูง ควบคู่กับ Weight Training เพื่อสร้างกล้ามเนื้อ');
+            } else {
+                recs.push('<strong>การคงสภาพ:</strong> รักษาสมดุลโภชนาการ และออกกำลังกายระดับปานกลางอย่างน้อย 150 นาที/สัปดาห์');
+            }
+
+            // Save state for Visualizer & Update UI
+            lastCalculatedState = { bmi, weight, height, bodyFat, minIdealWeight, maxIdealWeight };
+
+            updateUIOutputs({
+                bmi, bodyFat, fatCategory, fatMass, leanMass, wthrText,
+                timelineHtml, cardioHtml, recs
+            });
+
+            updateSVGVisualizer(bmi, bodyFat);
+        }
+
+        // --- Render UI Outputs ---
+        function updateUIOutputs(data) {
+            document.getElementById('bmiVal').innerText = data.bmi;
+            document.getElementById('bodyFatVal').innerText = data.bodyFat > 0 ? `${data.bodyFat}%` : 'N/A';
+            document.getElementById('fatCategory').innerText = data.fatCategory;
+            document.getElementById('massVal').innerText = `${data.fatMass} / ${data.leanMass} กก.`;
+            document.getElementById('wthrVal').innerText = data.wthrText || 'กรอกรอบเอวเพื่อประเมิน';
+            document.getElementById('timelineOutput').innerHTML = data.timelineHtml;
+            document.getElementById('cardioSwapOutput').innerHTML = data.cardioHtml;
+
+            // Update Badge Color
+            const badge = document.getElementById('bmiCategoryBadge');
+            if (data.bmi < 18.5) { badge.innerText = 'ผอม'; badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700'; }
+            else if (data.bmi <= 22.9) { badge.innerText = 'ปกติ/สมส่วน'; badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700'; }
+            else if (data.bmi <= 24.9) { badge.innerText = 'ท้วม'; badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700'; }
+            else { badge.innerText = 'อ้วน'; badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-100 text-rose-700'; }
+
+            // Render Recommendations
+            const recList = document.getElementById('recommendationsList');
+            recList.innerHTML = '';
+            data.recs.forEach(r => {
+                const li = document.createElement('li');
+                li.className = 'flex items-start gap-2';
+                li.innerHTML = `<span class="text-teal-500">•</span><span>${r}</span>`;
+                recList.appendChild(li);
+            });
+        }
+
+        // --- SVG Body Visualizer Logic ---
+        function setVisualizerMode(mode) {
+            currentVisualizerMode = mode;
+            const currentBtn = document.getElementById('toggleCurrentBtn');
+            const goalBtn = document.getElementById('toggleGoalBtn');
+            const tag = document.getElementById('visualizerTag');
+
+            if (mode === 'current') {
+                currentBtn.className = 'px-3 py-1.5 rounded-lg bg-white shadow-sm text-slate-800 transition';
+                goalBtn.className = 'px-3 py-1.5 rounded-lg text-slate-500 transition';
+                tag.innerText = 'โมเดลจำลองปัจจุบัน';
+                updateSVGVisualizer(lastCalculatedState.bmi, lastCalculatedState.bodyFat);
+            } else {
+                goalBtn.className = 'px-3 py-1.5 rounded-lg bg-white shadow-sm text-slate-800 transition';
+                currentBtn.className = 'px-3 py-1.5 rounded-lg text-slate-500 transition';
+                tag.innerText = 'โมเดลหุ่นเป้าหมาย (Ideal Goal)';
+                updateSVGVisualizer(21.5, 15); // Normal target BMI & Fat
+            }
+        }
+
+        function updateSVGVisualizer(bmi, bodyFat) {
+            const bodySilhouette = document.getElementById('bodySilhouette');
+            const bodyPath = document.getElementById('bodyPath');
+
+            // Scale calculations based on BMI
+            let scaleX = 1;
+            if (bmi < 18.5) scaleX = 0.85; // Slimmer
+            else if (bmi > 23 && bmi <= 25) scaleX = 1.15;
+            else if (bmi > 25 && bmi <= 30) scaleX = 1.35;
+            else if (bmi > 30) scaleX = 1.55;
+
+            // Apply SVG transform dynamically
+            bodySilhouette.style.transform = `scaleX(${scaleX})`;
+        }
+
+        // --- Auth & LocalStorage Progress Tracking ---
+        function toggleAuthModal() {
+            document.getElementById('authModal').classList.toggle('hidden');
+        }
+
+        function switchAuthMode(mode) {
+            if (mode === 'register') {
+                document.getElementById('loginFormContainer').classList.add('hidden');
+                document.getElementById('registerFormContainer').classList.remove('hidden');
+            } else {
+                document.getElementById('registerFormContainer').classList.add('hidden');
+                document.getElementById('loginFormContainer').classList.remove('hidden');
+            }
+        }
+
+        function handleRegister(e) {
+            e.preventDefault();
+            const u = document.getElementById('regUsername').value.trim();
+            const p = document.getElementById('regPassword').value;
+
+            if (localStorage.getItem(`user_${u}`)) {
+                alert('ชื่อผู้ใช้งานนี้มีอยู่ในระบบแล้ว');
+                return;
+            }
+
+            const userData = { username: u, password: p, history: [] };
+            localStorage.setItem(`user_${u}`, JSON.stringify(userData));
+            loginUser(u);
+            toggleAuthModal();
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const u = document.getElementById('loginUsername').value.trim();
+            const p = document.getElementById('loginPassword').value;
+
+            const stored = localStorage.getItem(`user_${u}`);
+            if (!stored) {
+                alert('ไม่พบผู้ใช้งานนี้');
+                return;
+            }
+
+            const userData = JSON.parse(stored);
+            if (userData.password !== p) {
+                alert('รหัสผ่านไม่ถูกต้อง');
+                return;
+            }
+
+            loginUser(u);
+            toggleAuthModal();
+        }
+
+        function loginUser(username) {
+            currentUser = username;
+            localStorage.setItem('activeSession', username);
+            checkAuthSession();
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            localStorage.removeItem('activeSession');
+            checkAuthSession();
+        }
+
+        function checkAuthSession() {
+            const active = localStorage.getItem('activeSession');
+            const authNav = document.getElementById('authNav');
+            const userBanner = document.getElementById('userBanner');
+            const historyCard = document.getElementById('historyCard');
+
+            if (active) {
+                currentUser = active;
+                authNav.innerHTML = `
+                    <span class="text-xs text-slate-300">เข้าสู่ระบบแล้ว: <strong>${currentUser}</strong></span>
+                    <button onclick="handleLogout()" class="text-xs bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 px-3 py-1.5 rounded-xl transition">ออกจากระบบ</button>
+                `;
+                userBanner.classList.remove('hidden');
+                historyCard.classList.remove('hidden');
+                document.getElementById('userNameDisplay').innerText = currentUser;
+                loadUserHistory();
+            } else {
+                authNav.innerHTML = `
+                    <button onclick="toggleAuthModal()" class="text-sm bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-xl shadow-lg shadow-teal-500/20 transition">เข้าสู่ระบบ / สมัครสมาชิก</button>
+                `;
+                userBanner.classList.add('hidden');
+                historyCard.classList.add('hidden');
+            }
+        }
+
+        function saveTodayRecord() {
+            if (!currentUser) return;
+
+            const stored = JSON.parse(localStorage.getItem(`user_${currentUser}`));
+            const todayStr = new Date().toLocaleDateString('th-TH');
+
+            const newRecord = {
+                date: todayStr,
+                weight: lastCalculatedState.weight,
+                bmi: lastCalculatedState.bmi,
+                bodyFat: lastCalculatedState.bodyFat
+            };
+
+            stored.history.unshift(newRecord);
+            localStorage.setItem(`user_${currentUser}`, JSON.stringify(stored));
+            loadUserHistory();
+            alert('บันทึกข้อมูลวันนี้เรียบร้อยแล้ว!');
+        }
+
+        function loadUserHistory() {
+            if (!currentUser) return;
+            const stored = JSON.parse(localStorage.getItem(`user_${currentUser}`));
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+
+            if (stored.history.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center p-4 text-slate-400">ยังไม่มีประวัติการบันทึก กด "บันทึกผลวันนี้" ด้านบนได้เลย</td></tr>`;
+                return;
+            }
+
+            stored.history.forEach((rec, idx) => {
+                let diffText = '-';
+                if (idx < stored.history.length - 1) {
+                    const prevWeight = stored.history[idx + 1].weight;
+                    const diff = (rec.weight - prevWeight).toFixed(1);
+                    diffText = diff < 0 ? `<span class="text-emerald-500 font-semibold">${diff} กก.</span>` : `<span class="text-rose-500 font-semibold">+${diff} กก.</span>`;
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-2.5 font-medium text-slate-800">${rec.date}</td>
+                    <td class="p-2.5">${rec.weight}</td>
+                    <td class="p-2.5">${rec.bmi}</td>
+                    <td class="p-2.5">${rec.bodyFat > 0 ? rec.bodyFat + '%' : 'N/A'}</td>
+                    <td class="p-2.5">${diffText}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Update Progress Summary Banner
+            if (stored.history.length > 1) {
+                const latest = stored.history[0].weight;
+                const first = stored.history[stored.history.length - 1].weight;
+                const totalDiff = (latest - first).toFixed(1);
+                document.getElementById('userProgressSummary').innerText = `คุณเปลี่ยนแปลงน้ำหนักรวมแล้ว ${totalDiff} กก. นับตั้งแต่เริ่มบันทึก`;
+            }
+        }
+    </script>
+</body>
+</html>
